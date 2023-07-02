@@ -33,7 +33,7 @@ def thread_function():
     # ...
 
 # Main program
-if __name__ == '__main__':
+ if __name__ == '__main__':
     # Create threads
     thread1 = create_thread(thread_function)
     thread2 = create_thread(thread_function)
