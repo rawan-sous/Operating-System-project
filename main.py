@@ -21,11 +21,11 @@ def scheduler(threads):
 # Synchronization and Communication
 def lock_example(lock):
     lock.acquire()
-    try:
+    #try:
         # Perform thread-safe operations
         # ...
-    finally:
-        lock.release()
+    #finally:
+    lock.release()
 
 # Example entry point function for a thread
 def thread_function():
