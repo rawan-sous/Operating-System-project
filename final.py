@@ -213,7 +213,8 @@ class Scheduler:
                 self.current_thread = next_thread
                 self.current_thread.start()
 
-def thread_entry_point():
+def thread_entry_point(name):
+
     thread_name = threading.current_thread().name
     for i in range(5):
         print("Thread", thread_name, "is running")
@@ -342,3 +343,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
