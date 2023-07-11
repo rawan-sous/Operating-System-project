@@ -481,6 +481,7 @@ def main():
 
                     # Update the thread states after joining
                     linked_list.set_state(thread.get_thread_id(), "terminated")
+                    linked_list.delete(thread.get_thread_id())
 
                 print("All threads have completed.")
 
