@@ -1,0 +1,600 @@
+from threading import Lock, Semaphore, Condition, Thread
+import threading
+import time
+import sys
+import queue
+import random
+
+
+class Node:
+    def __init__(self, id, name, currentState):
+        self.id = id
+        self.name = name
+        self.currentState = currentState
+        self.next = None
+
+
+class LinkedList:
+    def __init__(self):
+        self.head = None
+
+    def is_empty(self):
+        return self.head is None
+
+    def append(self, id, name, currentState):
+        new_node = Node(id, name, currentState)
+        if self.is_empty():
+            self.head = new_node
+        else:
+            current = self.head
+            while current.next:
+                current = current.next
+            current.next = new_node
+
+    def delete(self, id):
+        if self.is_empty():
+            return
+        if self.head.id == id:
+            self.head = self.head.next
+            return
+        current = self.head
+        prev = None
+        while current:
+            if current.id == id:
+                prev.next = current.next
+                return
+            prev = current
+            current = current.next
+
+    def display(self):
+        current = self.head
+        print("Thread ID\tThread Name\tCurrent State")
+        while current:
+            print(f"{current.id}\t\t{current.name}\t\t{current.currentState}")
+            current = current.next
+
+    def set_state(self, id, state):
+        current = self.head
+        while current:
+            if current.id == id:
+                current.currentState = state
+                return
+            current = current.next
+
+
+class Mailbox:
+    def __init__(self):
+        self.messages = queue.Queue()
+
+    def send(self, message):
+        self.messages.put(message)
+
+    def receive(self):
+        return self.messages.get()
+
+
+class CustomThread(threading.Thread):
+    def __init__(self, thread_id, thread_name, entry_point, semaphore, lock, mailbox):
+        threading.Thread.__init__(self)
+        self.thread_id = thread_id
+        self.thread_name = thread_name
+        self.entry_point = entry_point
+        self.semaphore = semaphore
+        self.lock = lock
+        self.mailbox = mailbox
+        self.state = "created"
+        self.blocked = threading.Event()
+
+    def run(self):
+        self.semaphore.acquire()
+        self.state = "running"
+        self.semaphore.release()
+        self.entry_point()
+        self.semaphore.acquire()
+        self.state = "terminated"
+        self.semaphore.release()
+
+    def block(self):
+        self.blocked.wait()
+
+    def unblock(self):
+        self.blocked.set()
+
+    def set_entry_point(self, entry_point):
+        self.entry_point = entry_point
+
+    def get_entry_point(self):
+        return self.entry_point
+
+    def get_thread_name(self):
+        return self.thread_name
+
+    def get_thread_id(self):
+        return self.thread_id
+
+    def restore(self):
+        self.semaphore.acquire()
+        self.state = "running"
+        self.semaphore.release()
+
+    def get_priority(self):
+        return random.randint(0, 9)
+
+
+class Scheduler:
+    def __init__(self):
+        self.threads = queue.PriorityQueue()
+        self.current_thread_index = 0
+
+    def add_thread(self, thread):
+        self.threads.put((thread.get_priority(), self.current_thread_index, thread))
+        self.current_thread_index += 1
+
+    def get_next_thread(self):
+        _, _, thread = self.threads.get()
+        return thread
+
+    def get_thread(self, thread_id):
+        threads = list(self.threads.queue)
+        for _, _, thread in threads:
+            if thread.get_thread_id() == thread_id:
+                return thread
+        return None
+
+    def get_terminated_thread(self):
+        terminated_threads = []
+        while not self.threads.empty():
+            _, _, thread = self.threads.get()
+            if not thread.is_alive():
+                terminated_threads.append(thread)
+        return terminated_threads
+
+    def is_empty(self):
+        return self.threads.empty()
+
+
+class CustomLock:
+    def __init__(self):
+        self.locked = False
+        self.waiting_queue = queue.Queue()
+
+    def acquire(self):
+        if self.locked:
+            self.waiting_queue.put(threading.current_thread())
+            threading.current_thread().block()
+        else:
+            self.locked = True
+
+    def release(self):
+        if not self.waiting_queue.empty():
+            thread = self.waiting_queue.get()
+            thread.unblock()
+        else:
+            self.locked = False
+
+    def is_locked(self):
+        return self.locked
+
+    def locked_by(self):
+        return self.locked_by
+
+    def get_waiting_queue(self):
+        return self.waiting_queue
+
+    def get_lock(self):
+        return self.locked
+
+    def get_locked_by(self):
+        return self.locked_by
+
+
+class CustomCondition:
+    def __init__(self):
+        self.condition = threading.Condition()
+
+    def wait(self):
+        with self.condition:
+            self.condition.wait()
+
+    def signal(self):
+        with self.condition:
+            self.condition.notify()
+
+    def notify(self):
+        with self.condition:
+            self.condition.notify_all()
+    def acquire(self):
+        with self.condition:
+            self.condition.acquire()
+    def release(self):
+        with self.condition:
+            self.condition.release()
+
+
+
+class Barrier:
+    def __init__(self, count):
+        self.count = count
+        self.waiting_queue = queue.Queue()
+        self.release_lock = threading.Lock()
+
+    def wait(self):
+        self.count -= 1
+        if self.count > 0:
+            self.waiting_queue.put(threading.current_thread())
+            threading.current_thread().block()
+        else:
+            with self.release_lock:
+                while not self.waiting_queue.empty():
+                    thread = self.waiting_queue.get()
+                    thread.unblock()
+
+
+class Join:
+    def __init__(self, thread):
+        self.thread = thread
+
+    def wait(self):
+        self.thread.join()
+
+
+class Message:
+    def __init__(self, message):
+        self.message = message
+
+
+
+
+
+class ThreadSafe:
+    def __init__(self, value=None):
+        self.value = value
+        self.lock = threading.Lock()
+
+    def increment(self):
+        with self.lock:
+            self.value += 1
+
+    def decrement(self):
+        with self.lock:
+            self.value -= 1
+
+    def set_value(self, new_value):
+        with self.lock:
+            self.value = new_value
+
+    def get_value(self):
+        with self.lock:
+            return self.value
+
+
+class ThreadLocal:
+    def __init__(self):
+        self.local = {}
+
+    def set(self, value):
+        self.local[threading.current_thread()] = value
+
+    def get(self):
+        return self.local[threading.current_thread()]
+
+
+class ThreadPool:
+    def __init__(self):
+        self.pool = []
+        self.lock = CustomLock()
+
+    def add_thread(self, thread):
+        self.lock.acquire()
+        self.pool.append(thread)
+        self.lock.release()
+
+    def get_thread(self):
+        self.lock.acquire()
+        if len(self.pool) > 0:
+            thread = self.pool.pop()
+        else:
+            thread = None
+        self.lock.release()
+        return thread
+
+
+class ThreadCancellation:
+    def __init__(self):
+        self.lock = CustomLock()
+
+    def cancel(self, thread):
+        self.lock.acquire()
+        thread.cancel()
+        self.lock.release()
+
+
+class ThreadScheduler:
+    def __init__(self):
+        self.ready_queue = queue.Queue()
+        self.blocked_queue = queue.Queue()
+        self.lock = CustomLock()
+
+    def add_thread(self, thread):
+        self.lock.acquire()
+        self.ready_queue.put(thread)
+        self.lock.release()
+
+    def get_thread(self):
+        self.lock.acquire()
+        if self.ready_queue.empty():
+            thread = None
+        else:
+            thread = self.ready_queue.get()
+        self.lock.release()
+        return thread
+
+    def block_thread(self, thread):
+        self.lock.acquire()
+        self.blocked_queue.put(thread)
+        self.lock.release()
+
+    def unblock_thread(self):
+        self.lock.acquire()
+        if self.blocked_queue.empty():
+            thread = None
+        else:
+            thread = self.blocked_queue.get()
+        self.lock.release()
+        return thread
+
+
+class ThreadPriority:
+    def __init__(self):
+        self.ready_queue = queue.Queue()
+        self.blocked_queue = queue.Queue()
+        self.lock = CustomLock()
+
+    def add_thread(self, thread):
+        self.lock.acquire()
+        self.ready_queue.put(thread)
+        self.lock.release()
+
+    def get_thread(self):
+        self.lock.acquire()
+        if self.ready_queue.empty():
+            thread = None
+        else:
+            thread = self.ready_queue.get()
+        self.lock.release()
+        return thread
+
+    def block_thread(self, thread):
+        self.lock.acquire()
+        self.blocked_queue.put(thread)
+        self.lock.release()
+
+    def unblock_thread(self):
+        self.lock.acquire()
+        if self.blocked_queue.empty():
+            thread = None
+        else:
+            thread = self.blocked_queue.get()
+        self.lock.release()
+        return thread
+
+
+class ThreadSynchronization:
+    def __init__(self):
+        self.condition = CustomCondition()
+
+    def acquire(self):
+        self.condition.acquire()
+
+    def release(self):
+        self.condition.release()
+
+    def wait(self):
+        self.condition.wait()
+
+    def notify(self):
+        self.condition.notify()
+
+    def notify_all(self):
+        self.condition.notify_all()
+
+
+
+class ErrorHandling:
+    def __init__(self):
+        self.lock = CustomLock()
+        self.error = None
+
+    def set_error(self, error):
+        self.lock.acquire()
+        self.error = error
+        self.lock.release()
+
+    def get_error(self):
+        self.lock.acquire()
+        error = self.error
+        self.lock.release()
+        return error
+
+
+def main():
+    linked_list = LinkedList()
+    scheduler = Scheduler()
+    semaphore = Semaphore(2)
+    lock = CustomLock()
+    thread_sync = ThreadSynchronization()
+    shared_memory = ThreadSafe()
+    mailbox = Mailbox()
+    thread_id_counter = 1
+    Lk= True
+
+    while True:
+        print("Thread Management Simulator")
+        print("1. Create Thread")
+        print("2. Terminate Thread")
+        print("3. Display Thread List")
+        print("4. Schedule and Execute Threads")
+        print("5. Thread Synchronization & Communication")
+        print("6. Error Handling")
+        print("7. Exit")
+        choice = input("Enter your choice: ")
+
+        if choice == "":
+            continue
+
+        try:
+            choice = int(choice)
+        except ValueError:
+            print("Invalid choice. Please enter a number.")
+            continue
+
+        if choice == 1:
+            thread_name = input("Enter thread name: ")
+            unique_thread_id = input("Enter unique thread id: ")
+
+            if unique_thread_id == "":
+                continue
+
+            try:
+                unique_thread_id = int(unique_thread_id)
+            except ValueError:
+                print("Invalid thread id. Please enter a number.")
+                continue
+
+            if scheduler.get_thread(unique_thread_id) is not None:
+                print("Thread ID is already taken. Please enter a unique ID.")
+                continue
+
+            entry_point = my_entry_function
+            new_thread = CustomThread(unique_thread_id, thread_name, entry_point, semaphore, lock, mailbox)
+
+            linked_list.append(unique_thread_id, thread_name, "created")
+            scheduler.add_thread(new_thread)
+
+        elif choice == 2:
+            thread_id = input("Enter thread id: ")
+
+            if thread_id == "":
+                continue
+
+            try:
+                thread_id = int(thread_id)
+            except ValueError:
+                print("Invalid thread id. Please enter a number.")
+                continue
+
+            thread = scheduler.get_thread(thread_id)
+            if thread is not None and thread.is_alive():
+                thread.join()
+            linked_list.delete(thread_id)
+
+        elif choice == 3:
+            print("Current Thread List:")
+            linked_list.display()
+            print()
+
+        elif choice == 4:
+            while not scheduler.is_empty():
+                thread = scheduler.get_next_thread()
+                thread.start()
+                thread.join()
+
+                linked_list.set_state(thread.get_thread_id(), "terminated")
+                linked_list.delete(thread.get_thread_id())
+
+            print("All threads have completed.")
+
+        elif choice == 5:
+            print("Thread Synchronization & Communication")
+            print("1. Thread Synchronization")
+            print("2. Thread Communication")
+            print("3. Back")
+            choice = input("Enter your choice: ")
+            if choice == "":
+                continue
+            elif choice == "1":
+                print("Thread Synchronization")
+                print("1. Acquire Lock")
+                print("2. Release Lock")
+                print("3. Back")
+                choice = input("Enter your choice: ")
+                if choice == "":
+                    continue
+                elif choice == "1":
+                    thread_sync.acquire()
+                    print("Lock acquired.")
+                    Lk= True
+
+                elif choice == "2":
+
+                    thread_sync.release()
+                    print("Lock released.")
+                    Lk= False
+               
+                else:
+                    print("Invalid choice. Please enter a number from 1 to 3.")
+                    continue
+            elif choice == "2":
+                print("Thread Communication - Shared Memory")
+                print("1. Send Message")
+                print("2. Receive Message")
+                print("3. Back")
+                choice = input("Enter your choice: ")
+                if choice == "":
+                    continue
+                elif choice == "1":
+                    if Lk== True:
+                        print("shared Memory is locked. Please wait for the lock to be released.")
+                        continue
+                    else:
+                        message = input("Enter the message to send: ")
+                        mailbox.send(message)
+                elif choice == "2":
+                    if Lk== True:
+                        print("shared Memory is locked. Please wait for the lock to be released.")
+                        continue
+                    else:
+                        message = mailbox.receive()
+                        print("Received message:", message)
+                elif choice == "3":
+                    continue
+                else:
+                    print("Invalid choice. Please enter a number from 1 to 3.")
+                    continue
+        elif choice==6:
+            print("Error Handling")
+            print("1. Set Error")
+            print("2. Get Error")
+            print("3. Back")
+            choice = input("Enter your choice: ")
+            if choice == "":
+                continue
+            elif choice == "1":
+                error = input("Enter the error to set: ")
+                shared_memory.set_error(error)
+            elif choice == "2":
+                error = shared_memory.get_error()
+                print("Received error:", error)
+            elif choice == "3":
+                continue
+            else:
+                print("Invalid choice. Please enter a number from 1 to 3.")
+                continue
+        elif choice == 7:
+            print("Thank you for using the Thread Management Simulator!")
+            break
+        else:
+            print("Invalid choice. Please enter a number from 1 to 7.")
+            continue
+
+
+
+
+
+def my_entry_function():
+   print(f"This is the entry point for Thread {threading.current_thread().getName()} with id {threading.get_ident()}")
+
+
+
+if __name__ == "__main__":
+    main()
