@@ -88,7 +88,8 @@ class CustomThread(threading.Thread):
         self.semaphore.release()
 
     def block(self):
-        self.blocked.wait()
+        self.blocked.clear()
+
 
     def unblock(self):
         self.blocked.set()
@@ -164,8 +165,20 @@ class CustomLock:
         else:
             self.waiting_queue.put(thread_id)
             self.lock.release()
-            thread_id.block()
-            self.acquire_lock_entry_point(thread_id)
+            thread = self.get_thread(thread_id)
+            if thread:
+                thread.block()
+                self.acquire_lock_entry_point(thread_id)
+
+    def get_thread(self, thread_id):
+        for thread in threading.enumerate():
+            if thread.get_thread_id() == thread_id:
+                return thread
+        return None
+    
+        
+           
+
 
     def release(self, thread_id):
         self.lock.acquire()
@@ -232,14 +245,14 @@ def my_entry_function():
    print(f"This is the entry point for Thread {threading.current_thread().name} with id {threading.get_ident()}")
 
 
-def send_message_entry_point():
+def send_message_entry_point(lock):
     lock.acquire()
     print("Lock acquired for sending message.")
     # Perform the necessary actions to send the message
     lock.release()
     print("Lock released after sending message.")
 
-def receive_message_entry_point():
+def receive_message_entry_point(lock):
     lock.acquire()
     print("Lock acquired for receiving message.")
     # Perform the necessary actions to receive the message
@@ -349,7 +362,6 @@ def main():
 
             print("All threads have completed.")
 
-
         elif choice == 5:
             print("Thread Synchronization & Communication")
             print("1. Thread Synchronization")
@@ -373,16 +385,21 @@ def main():
                     if thread is not None:
                         linked_list.set_state(thread_id, "running")
                         lock.acquire(thread_id=thread_id)
+                        thread.set_entry_point(acquire_lock_entry_point)
+                        print("Lock acquired successfully by thread ",acquire_lock_entry_point)
                     else:
                         print("Thread not found.")
                 elif choice == "2":
                     thread_id = int(input("Enter thread id: "))
-                    lock.release(thread_id=thread_id)
+
                     thread = scheduler.get_thread(thread_id)
                     if thread is not None:
+                        linked_list.set_state(thread_id, "running")
+                        lock.release(thread_id=thread_id)
                         thread.set_entry_point(release_lock_entry_point)
+                        print("Lock released successfully by thread ",release_lock_entry_point)
                     else:
-                        print("Thread not found.")
+                        print("Thread not found.") 
                 elif choice == "3":
                     continue
                 else:
@@ -461,4 +478,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
