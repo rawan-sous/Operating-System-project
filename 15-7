@@ -1,4 +1,5 @@
 import threading
+from threading import Thread
 import queue
 import random
 
@@ -148,31 +149,28 @@ class Scheduler:
     def is_empty(self):
         with self.lock:
             return len(self.threads) == 0
-
+scheduler = Scheduler()
 class CustomLock:
     def __init__(self):
         self.lock = threading.Lock()
         self.locked_by = None
         self.waiting_queue = queue.Queue()
-        self.currently_locked = None  # New attribute to track the current lock holder
+        self.currently_locked = None  
 
     def acquire(self, thread_id):
         self.lock.acquire()
         if self.locked_by is None:
             self.locked_by = thread_id
-            self.currently_locked = thread_id  # Set the current lock holder
+            self.currently_locked = thread_id
             self.lock.release()
         else:
             self.waiting_queue.put(thread_id)
-            self.lock.release()
-            thread = self.get_thread(thread_id)
-            if thread:
-                thread.block()
-                self.acquire_lock_entry_point(thread_id)
-
+            self.lock.release() 
+            
+         
     def get_thread(self, thread_id):
-        for thread in threading.enumerate():
-            if thread.get_thread_id() == thread_id:
+        for thread in scheduler.threads:
+            if thread.thread_id == thread_id:
                 return thread
         return None
     
@@ -186,7 +184,7 @@ class CustomLock:
             if not self.waiting_queue.empty():
                 next_thread_id = self.waiting_queue.get()
                 self.locked_by = next_thread_id
-                self.currently_locked = next_thread_id  # Set the new lock holder
+                self.currently_locked = next_thread_id  
                 self.lock.release()
                 self.get_thread(next_thread_id).restore()
 
@@ -196,7 +194,7 @@ class CustomLock:
     def acquire_lock_entry_point(self, thread_id):
         self.lock.acquire()
         print("Lock acquired by thread id", thread_id)
-        # Perform the necessary actions
+        
         self.lock.release()
         print("Lock released.")
 
@@ -248,14 +246,14 @@ def my_entry_function():
 def send_message_entry_point(lock):
     lock.acquire()
     print("Lock acquired for sending message.")
-    # Perform the necessary actions to send the message
+    
     lock.release()
     print("Lock released after sending message.")
 
 def receive_message_entry_point(lock):
     lock.acquire()
     print("Lock acquired for receiving message.")
-    # Perform the necessary actions to receive the message
+   
     lock.release()
     print("Lock released after receiving message.")
 
@@ -263,7 +261,7 @@ def acquire_lock_entry_point():
     global lock
     lock.acquire()
     print("Lock acquired.")
-    # Perform the necessary actions
+   
     lock.release()
     print("Lock released.")
 
@@ -271,7 +269,7 @@ def release_lock_entry_point():
     global lock
     lock.acquire()
     print("Lock acquired.")
-    # Perform the necessary actions
+   
     lock.release()
     print("Lock released.")
 
@@ -279,7 +277,7 @@ def main():
     linked_list = LinkedList()
     scheduler = Scheduler()
     semaphore = threading.Semaphore(2)
-    lock = CustomLock()  # Global lock
+    lock = CustomLock() 
     mailbox = Mailbox()
     thread_id_counter = 1
     shared_memory = ThreadSafe()
@@ -291,8 +289,7 @@ def main():
         print("3. Display Thread List")
         print("4. Schedule and Execute Threads")
         print("5. Thread Synchronization & Communication")
-        print("6. Error Handling")
-        print("7. Exit")
+        print("6. Exit")
         choice = input("Enter your choice: ")
 
         if choice == "":
@@ -417,63 +414,41 @@ def main():
                     thread_id = int(input("Enter thread id: "))
                     if lock.is_acquired(thread_id=thread_id):
                         message = input("Enter message: ")
-                        thread = scheduler.get_thread(thread_id)
-
                         mailbox.send(message)
-                        print("Message sent.")
                         linked_list.set_state(thread_id, "terminated")
                         linked_list.delete(thread_id)
-
+                        
                     else:
+
                         print("The message cannot be sent because the thread does not have the lock acquired.")
                         linked_list.set_state(thread_id, "waiting")
+                    
                 elif choice == "2":
                     thread_id = int(input("Enter thread id: "))
                     if lock.is_acquired(thread_id=thread_id):
                         message = mailbox.receive()
-                        print("Received message:", message)
-                        thread = scheduler.get_thread(thread_id)
-                        if thread is not None:
-                            print("Message received.")
-                            linked_list.set_state(thread_id, "terminated")
-                            linked_list.delete(thread_id)
-                        else:
-                            print("Thread not found.")
+                        print("Message received:", message)
+                        linked_list.set_state(thread_id, "terminated")
+                        linked_list.delete(thread_id)
+
                     else:
                         print("The message cannot be received because the thread does not have the lock acquired.")
                         linked_list.set_state(thread_id, "waiting")
+
                 elif choice == "3":
                     continue
                 else:
                     print("Invalid choice. Please enter a number from 1 to 3.")
                     continue
 
-        elif choice == 6:
-            print("Error Handling")
-            print("1. Set Error")
-            print("2. Get Error")
-            print("3. Back")
-            choice = input("Enter your choice: ")
-            if choice == "":
-                continue
-            elif choice == "1":
-                error = input("Enter the error to set: ")
-                shared_memory.set_error(error)
-            elif choice == "2":
-                error = shared_memory.get_error()
-                print("Received error:", error)
-            elif choice == "3":
-                continue
-            else:
-                print("Invalid choice. Please enter a number from 1 to 3.")
-                continue
+        
 
-        elif choice == 7:
+        elif choice == 6:
             print("Thank you for using the Thread Management Simulator!")
             break
 
         else:
-            print("Invalid choice. Please enter a number from 1 to 7.")
+            print("Invalid choice. Please enter a number from 1 to 6.")
             continue
 
 if __name__ == "__main__":
